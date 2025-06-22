@@ -1,0 +1,226 @@
+import bpy
+import bmesh
+import mathutils
+from mathutils import Vector
+import math
+
+def clear_scene():
+    """Clear all mesh objects from the scene"""
+    bpy.ops.object.select_all(action='SELECT')
+    bpy.ops.object.delete(use_global=False, confirm=False)
+
+def create_spider_body():
+    """Create the main body parts of the jumping spider"""
+    
+    # Create abdomen (larger, rounded)
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=0.8, location=(0, -1.2, 0.5))
+    abdomen = bpy.context.active_object
+    abdomen.name = "Abdomen"
+    abdomen.scale = (1.2, 1.5, 1.0)
+    
+    # Create cephalothorax (front body part)
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=0.6, location=(0, 0.3, 0.4))
+    cephalothorax = bpy.context.active_object
+    cephalothorax.name = "Cephalothorax"
+    cephalothorax.scale = (1.0, 1.2, 0.8)
+    
+    return abdomen, cephalothorax
+
+def create_spider_legs():
+    """Create 8 spider legs with proper joints"""
+    legs = []
+    
+    # Leg positions and angles
+    leg_positions = [
+        # Left side legs
+        (-0.8, 0.8, 0.2, 45),   # Front left
+        (-0.9, 0.2, 0.2, 75),   # Mid-front left
+        (-0.9, -0.4, 0.2, 105), # Mid-back left
+        (-0.8, -1.0, 0.2, 135), # Back left
+        # Right side legs
+        (0.8, 0.8, 0.2, -45),   # Front right
+        (0.9, 0.2, 0.2, -75),   # Mid-front right
+        (0.9, -0.4, 0.2, -105), # Mid-back right
+        (0.8, -1.0, 0.2, -135), # Back right
+    ]
+    
+    for i, (x, y, z, angle) in enumerate(leg_positions):
+        leg_parts = []
+        
+        # Create leg segments
+        for j, (length, thickness) in enumerate([(0.6, 0.08), (0.8, 0.06), (0.5, 0.04)]):
+            bpy.ops.mesh.primitive_cylinder_add(
+                radius=thickness,
+                depth=length,
+                location=(x + j * 0.3 * math.cos(math.radians(angle)),
+                         y + j * 0.3 * math.sin(math.radians(angle)),
+                         z - j * 0.1)
+            )
+            
+            segment = bpy.context.active_object
+            segment.name = f"Leg_{i+1}_Segment_{j+1}"
+            
+            # Rotate leg segment
+            segment.rotation_euler = (0, 0, math.radians(angle))
+            if j > 0:
+                segment.rotation_euler = (math.radians(20 * j), 0, math.radians(angle))
+            
+            leg_parts.append(segment)
+        
+        legs.extend(leg_parts)
+    
+    return legs
+
+def create_spider_eyes():
+    """Create the characteristic large front eyes of a jumping spider"""
+    eyes = []
+    
+    # Main large front eyes
+    eye_positions = [
+        (-0.25, 0.8, 0.7),  # Left main eye
+        (0.25, 0.8, 0.7),   # Right main eye
+        (-0.4, 0.75, 0.6),  # Left side eye
+        (0.4, 0.75, 0.6),   # Right side eye
+        (-0.15, 0.85, 0.5), # Left small eye
+        (0.15, 0.85, 0.5),  # Right small eye
+        (-0.1, 0.9, 0.8),   # Left top eye
+        (0.1, 0.9, 0.8),    # Right top eye
+    ]
+    
+    eye_sizes = [0.15, 0.15, 0.08, 0.08, 0.05, 0.05, 0.06, 0.06]
+    
+    for i, (pos, size) in enumerate(zip(eye_positions, eye_sizes)):
+        bpy.ops.mesh.primitive_uv_sphere_add(radius=size, location=pos)
+        eye = bpy.context.active_object
+        eye.name = f"Eye_{i+1}"
+        eyes.append(eye)
+    
+    return eyes
+
+def create_pedipalps():
+    """Create the pedipalps (feeding appendages)"""
+    pedipalps = []
+    
+    positions = [(-0.3, 1.0, 0.3), (0.3, 1.0, 0.3)]
+    
+    for i, pos in enumerate(positions):
+        bpy.ops.mesh.primitive_cylinder_add(radius=0.05, depth=0.3, location=pos)
+        pedipalp = bpy.context.active_object
+        pedipalp.name = f"Pedipalp_{i+1}"
+        pedipalp.rotation_euler = (math.radians(30), 0, 0)
+        pedipalps.append(pedipalp)
+    
+    return pedipalps
+
+def create_materials():
+    """Create materials for the spider"""
+    
+    # Body material (dark brown/black)
+    body_mat = bpy.data.materials.new(name="SpiderBody")
+    body_mat.use_nodes = True
+    bsdf = body_mat.node_tree.nodes["Principled BSDF"]
+    bsdf.inputs[0].default_value = (0.1, 0.05, 0.02, 1.0)  # Dark brown
+    bsdf.inputs[7].default_value = 0.3  # Roughness
+    bsdf.inputs[12].default_value = 0.8  # Specular
+    
+    # Eye material (black with reflection)
+    eye_mat = bpy.data.materials.new(name="SpiderEye")
+    eye_mat.use_nodes = True
+    eye_bsdf = eye_mat.node_tree.nodes["Principled BSDF"]
+    eye_bsdf.inputs[0].default_value = (0.0, 0.0, 0.0, 1.0)  # Black
+    eye_bsdf.inputs[7].default_value = 0.1  # Very smooth
+    eye_bsdf.inputs[12].default_value = 1.0  # High specular
+    
+    # Leg material (slightly lighter brown)
+    leg_mat = bpy.data.materials.new(name="SpiderLeg")
+    leg_mat.use_nodes = True
+    leg_bsdf = leg_mat.node_tree.nodes["Principled BSDF"]
+    leg_bsdf.inputs[0].default_value = (0.15, 0.08, 0.04, 1.0)  # Medium brown
+    leg_bsdf.inputs[7].default_value = 0.4  # Roughness
+    
+    return body_mat, eye_mat, leg_mat
+
+def apply_materials(abdomen, cephalothorax, legs, eyes, pedipalps):
+    """Apply materials to spider parts"""
+    body_mat, eye_mat, leg_mat = create_materials()
+    
+    # Apply body material
+    abdomen.data.materials.append(body_mat)
+    cephalothorax.data.materials.append(body_mat)
+    
+    # Apply leg material
+    for leg in legs:
+        leg.data.materials.append(leg_mat)
+    
+    # Apply eye material
+    for eye in eyes:
+        eye.data.materials.append(eye_mat)
+    
+    # Apply body material to pedipalps
+    for pedipalp in pedipalps:
+        pedipalp.data.materials.append(body_mat)
+
+def setup_lighting():
+    """Set up lighting for the spider"""
+    # Add a key light
+    bpy.ops.object.light_add(type='SUN', location=(5, 5, 10))
+    sun = bpy.context.active_object
+    sun.data.energy = 3.0
+    
+    # Add fill light
+    bpy.ops.object.light_add(type='AREA', location=(-3, -3, 5))
+    area = bpy.context.active_object
+    area.data.energy = 2.0
+    area.data.size = 5.0
+
+def create_jumping_spider():
+    """Main function to create the complete jumping spider"""
+    
+    # Clear the scene
+    clear_scene()
+    
+    # Create spider parts
+    print("Creating spider body...")
+    abdomen, cephalothorax = create_spider_body()
+    
+    print("Creating spider legs...")
+    legs = create_spider_legs()
+    
+    print("Creating spider eyes...")
+    eyes = create_spider_eyes()
+    
+    print("Creating pedipalps...")
+    pedipalps = create_pedipalps()
+    
+    print("Applying materials...")
+    apply_materials(abdomen, cephalothorax, legs, eyes, pedipalps)
+    
+    print("Setting up lighting...")
+    setup_lighting()
+    
+    # Set viewport shading to Material Preview or Rendered
+    for area in bpy.context.screen.areas:
+        if area.type == 'VIEW_3D':
+            for space in area.spaces:
+                if space.type == 'VIEW_3D':
+                    space.shading.type = 'MATERIAL_PREVIEW'
+    
+    # Position camera for good view
+    bpy.ops.object.camera_add(location=(3, -3, 2))
+    camera = bpy.context.active_object
+    camera.rotation_euler = (math.radians(60), 0, math.radians(45))
+    
+    print("Jumping spider created successfully!")
+    print("Switch to Material Preview or Rendered view to see the materials.")
+    
+    return {
+        'abdomen': abdomen,
+        'cephalothorax': cephalothorax,
+        'legs': legs,
+        'eyes': eyes,
+        'pedipalps': pedipalps
+    }
+
+# Run the spider creation
+if __name__ == "__main__":
+    spider_parts = create_jumping_spider()
